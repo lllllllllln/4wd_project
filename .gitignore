@@ -47,3 +47,6 @@ captures/
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Office temporary lock files
+~$*
