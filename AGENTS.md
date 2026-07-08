@@ -12,6 +12,16 @@
 
 树莓派项目目录：`/home/pi/4wd_project`
 
+# Hardware Interface References
+
+硬件接口优先查：
+
+- `环境说明/硬件接口速查手册.xlsx`
+
+该表 `Sheet1` 包含各模块在 Arduino、STM32、51、树莓派、wiringPi、BCM 下的接口编号。当前项目使用 Python `RPi.GPIO` 时，优先看 `BCM` 列；不要把 wiringPi 编号当成 BCM 编号。
+
+
+
 已使用过的 SSH 信息：
 
 - IP：`192.168.50.1`
