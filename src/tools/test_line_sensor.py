@@ -1,7 +1,7 @@
 """Manual read-only test for the four line tracking sensors.
 
 Usage on Raspberry Pi:
-    python -m src.tools.test_line_sensor --count 20 --interval 0.2
+    python3 -m src.tools.test_line_sensor --count 20 --interval 0.2
 """
 
 import argparse
