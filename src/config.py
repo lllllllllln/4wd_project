@@ -26,3 +26,23 @@ MOTOR_ENB = 13
 # Yahboom 示例代码中电机 PWM 频率为 2000 Hz。
 # 新手优先调 test_motor.py 的 --speed，不要先改 PWM 频率。
 MOTOR_PWM_FREQUENCY = 2000
+
+# 超声波引脚来自“环境说明/程序源码/”中 Yahboom 官方 Python 示例。
+# EchoPin = 0, TrigPin = 1 是厂商出厂默认接线（BCM 编号）。
+ULTRASONIC_TRIG = 1
+ULTRASONIC_ECHO = 0
+
+# 超时阈值（秒）：Echo 超过这个时间没反应就算超时。
+# 100ms 对应约 17m 最大测距，远超过 HC-SR04 的 4m 有效量程。
+ULTRASONIC_TIMEOUT = 0.10
+
+# 障碍判定阈值（厘米）：距离小于此值视为有障碍物。
+ULTRASONIC_THRESHOLD = 20
+
+# 每次测距采样次数：多次取中位数可降低单次异常值的干扰。
+ULTRASONIC_SAMPLES = 3
+
+# 舵机引脚：ServoPin = 23 来自 Yahboom 官方示例“servo_ultrasonic_avoid.py”。
+# 舵机 PWM 频率固定为 50 Hz（周期 20ms），这是标准舵机的工作频率。
+SERVO_PIN = 23
+SERVO_PWM_FREQUENCY = 50
