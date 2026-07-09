@@ -41,6 +41,155 @@ class CaptureResult:
 PathLike = Union[str, Path]
 
 
+class OpenCVCameraSession:
+    """Keep one OpenCV camera open while capturing several photos.
+
+    Args:
+        device_index: OpenCV camera index, usually 0 or 1 on Raspberry Pi.
+        width: Optional requested frame width.
+        height: Optional requested frame height.
+        warmup_frames: Frames discarded once after opening the camera.
+        warmup_seconds: Delay after opening the camera, allowing exposure to
+            stabilize.
+    """
+
+    def __init__(
+        self,
+        *,
+        device_index: int = 0,
+        width: Optional[int] = None,
+        height: Optional[int] = None,
+        warmup_frames: int = 5,
+        warmup_seconds: float = 0.5,
+    ):
+        if warmup_frames < 0:
+            raise ValueError("warmup_frames must be greater than or equal to 0")
+        if warmup_seconds < 0:
+            raise ValueError("warmup_seconds must be greater than or equal to 0")
+
+        self.device_index = device_index
+        self.width = width
+        self.height = height
+        self.warmup_frames = warmup_frames
+        self.warmup_seconds = warmup_seconds
+        self._cv2 = None
+        self._camera = None
+
+    def open(self) -> "OpenCVCameraSession":
+        """Open the OpenCV camera and discard initial warmup frames."""
+
+        try:
+            import cv2
+        except ImportError as exc:
+            raise CameraCaptureError(
+                "OpenCV is not installed. Install python3-opencv, or use "
+                "--backend libcamera if this is a CSI camera."
+            ) from exc
+
+        camera = cv2.VideoCapture(self.device_index)
+        if not camera.isOpened():
+            camera.release()
+            raise CameraCaptureError(
+                f"Cannot open camera device {self.device_index}. Check the "
+                "camera index, connection, and whether a video service is "
+                "using it."
+            )
+
+        if self.width is not None:
+            camera.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
+        if self.height is not None:
+            camera.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
+
+        if self.warmup_seconds > 0:
+            time.sleep(self.warmup_seconds)
+
+        self._cv2 = cv2
+        self._camera = camera
+        if self.warmup_frames:
+            self._read_frame(self.warmup_frames)
+        return self
+
+    def capture(
+        self,
+        output_path: PathLike,
+        *,
+        warmup_frames: int = 0,
+        delay_seconds: float = 0.0,
+    ) -> CaptureResult:
+        """Capture one frame from the open camera and save it.
+
+        Args:
+            output_path: Exact file path to save.
+            warmup_frames: Extra frames to discard immediately before saving.
+            delay_seconds: Optional delay after servo movement and before read.
+
+        Returns:
+            CaptureResult containing the saved path and frame dimensions.
+        """
+
+        if warmup_frames < 0:
+            raise ValueError("warmup_frames must be greater than or equal to 0")
+        if delay_seconds < 0:
+            raise ValueError("delay_seconds must be greater than or equal to 0")
+        if self._camera is None or self._cv2 is None:
+            raise CameraCaptureError("OpenCV camera session is not open")
+
+        if delay_seconds > 0:
+            time.sleep(delay_seconds)
+
+        target_path = Path(output_path)
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        frame = self._read_frame(warmup_frames)
+
+        saved = self._cv2.imwrite(str(target_path), frame)
+        if not saved:
+            raise CameraCaptureError(f"Failed to write photo to {target_path}")
+
+        frame_height, frame_width = frame.shape[:2]
+        return CaptureResult(
+            path=target_path,
+            width=int(frame_width),
+            height=int(frame_height),
+            device_index=self.device_index,
+            backend="opencv",
+        )
+
+    def close(self) -> None:
+        """Release the OpenCV camera resource."""
+
+        if self._camera is not None:
+            self._camera.release()
+            self._camera = None
+        self._cv2 = None
+
+    def _read_frame(self, warmup_frames: int):
+        """Read from OpenCV, discarding requested buffered frames first."""
+
+        if self._camera is None:
+            raise CameraCaptureError("OpenCV camera session is not open")
+
+        frame = None
+        reads = max(1, warmup_frames + 1)
+        for _ in range(reads):
+            ok, current_frame = self._camera.read()
+            if ok and current_frame is not None:
+                frame = current_frame
+            else:
+                time.sleep(0.05)
+
+        if frame is None:
+            raise CameraCaptureError(
+                f"Camera device {self.device_index} opened, but no frame was read."
+            )
+        return frame
+
+    def __enter__(self) -> "OpenCVCameraSession":
+        return self.open()
+
+    def __exit__(self, exc_type, exc, traceback) -> None:
+        self.close()
+
+
 def build_photo_path(
     output_dir: PathLike = DEFAULT_CAPTURE_DIR,
     prefix: str = DEFAULT_PHOTO_PREFIX,

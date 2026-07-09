@@ -57,6 +57,18 @@ LED_R_PIN = 22
 LED_G_PIN = 27
 LED_B_PIN = 24
 LED_PWM_FREQUENCY = 1000
+# 摄像头全景拍摄云台配置。
+# 当前硬件接口表中的“云台 J1 / BCM 23”更可能是超声波避障云台，
+# 不应默认当成摄像头水平云台。只有现场确认摄像头舵机信号线后，才在
+# 命令行里显式传入对应 BCM 编号。
+CAMERA_PAN_SERVO_PIN = None
+CAMERA_TILT_SERVO_PIN = None
+
+# 全景默认参数按参考项目“0-180 度、约 6 度一步”的思路设置。
+PANORAMA_START_ANGLE = 0
+PANORAMA_END_ANGLE = 180
+PANORAMA_FRAME_COUNT = 31
+PANORAMA_TILT_ANGLE = None
 
 # 四路巡线传感器引脚来自“环境说明/硬件接口速查手册.xlsx”的 BCM 列。
 # 传感器从小车左侧到右侧依次为：左1、左2、右1、右2。

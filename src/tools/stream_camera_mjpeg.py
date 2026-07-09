@@ -1,0 +1,120 @@
+"""摄像头 MJPEG 实时预览服务。
+
+用途：
+    在电脑浏览器里查看树莓派摄像头画面，用于手动调焦、调整支架和观察曝光。
+
+常用命令：
+    python3 src/tools/stream_camera_mjpeg.py --device 1
+
+然后在电脑浏览器打开：
+    http://树莓派IP:8080/
+"""
+
+from __future__ import annotations
+
+import argparse
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import sys
+import time
+
+
+def parse_args() -> argparse.Namespace:
+    """解析 MJPEG 预览服务参数。"""
+
+    parser = argparse.ArgumentParser(description="摄像头 MJPEG 实时预览服务。")
+    parser.add_argument("--device", type=int, default=1, help="OpenCV 摄像头编号。")
+    parser.add_argument("--host", default="0.0.0.0", help="监听地址。")
+    parser.add_argument("--port", type=int, default=8080, help="监听端口。")
+    parser.add_argument("--width", type=int, default=640, help="图像宽度。")
+    parser.add_argument("--height", type=int, default=480, help="图像高度。")
+    parser.add_argument("--fps", type=float, default=15, help="目标帧率。")
+    parser.add_argument("--jpeg-quality", type=int, default=80, help="JPEG 质量，1 到 100。")
+    return parser.parse_args()
+
+
+def main() -> int:
+    """启动实时 MJPEG 预览服务。"""
+
+    args = parse_args()
+    try:
+        import cv2
+    except ImportError:
+        print("未安装 OpenCV，无法启动实时预览。", file=sys.stderr)
+        return 1
+
+    camera = cv2.VideoCapture(args.device)
+    if not camera.isOpened():
+        print(f"无法打开摄像头 {args.device}", file=sys.stderr)
+        return 1
+
+    camera.set(cv2.CAP_PROP_FRAME_WIDTH, args.width)
+    camera.set(cv2.CAP_PROP_FRAME_HEIGHT, args.height)
+    camera.set(cv2.CAP_PROP_FPS, args.fps)
+    camera.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc("M", "J", "P", "G"))
+
+    class MjpegHandler(BaseHTTPRequestHandler):
+        """把 OpenCV 画面输出为浏览器可看的 MJPEG 流。"""
+
+        def do_GET(self):  # noqa: N802
+            if self.path in ("/", "/index.html"):
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(
+                    b"<html><body><img src='/stream.mjpg' style='max-width:100%;'></body></html>"
+                )
+                return
+
+            if self.path != "/stream.mjpg":
+                self.send_error(404)
+                return
+
+            self.send_response(200)
+            self.send_header("Age", "0")
+            self.send_header("Cache-Control", "no-cache, private")
+            self.send_header("Pragma", "no-cache")
+            self.send_header("Content-Type", "multipart/x-mixed-replace; boundary=frame")
+            self.end_headers()
+
+            frame_delay = 1.0 / max(1.0, args.fps)
+            while True:
+                ok, frame = camera.read()
+                if not ok or frame is None:
+                    time.sleep(0.05)
+                    continue
+                ok, encoded = cv2.imencode(
+                    ".jpg",
+                    frame,
+                    [int(cv2.IMWRITE_JPEG_QUALITY), args.jpeg_quality],
+                )
+                if not ok:
+                    continue
+                data = encoded.tobytes()
+                try:
+                    self.wfile.write(b"--frame\r\n")
+                    self.wfile.write(b"Content-Type: image/jpeg\r\n")
+                    self.wfile.write(f"Content-Length: {len(data)}\r\n\r\n".encode("ascii"))
+                    self.wfile.write(data)
+                    self.wfile.write(b"\r\n")
+                    time.sleep(frame_delay)
+                except (BrokenPipeError, ConnectionResetError):
+                    break
+
+        def log_message(self, format, *args):  # noqa: A002
+            return
+
+    server = ThreadingHTTPServer((args.host, args.port), MjpegHandler)
+    print(f"实时预览已启动: http://树莓派IP:{args.port}/", flush=True)
+    print("按 Ctrl+C 退出。", flush=True)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        camera.release()
+        server.server_close()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
